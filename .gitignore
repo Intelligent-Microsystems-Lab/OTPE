@@ -1,0 +1,4 @@
+data/
+test_data.npy
+train_data.npy
+val_data.npy
