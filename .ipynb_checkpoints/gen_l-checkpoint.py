@@ -17,18 +17,40 @@ from jax import random
 import matplotlib.pyplot as plt
 import os
 import seaborn as sb
-os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
-tau = 3.
-spike_fn = sl.fast_sigmoid
-batch_sz = 128
+
+utput_size = 10
 nlayers = 3
-layer_name = 128
-layer_sz = lambda i: layer_name
-n_iter = 2000#1800
-seq_len = 20
 dim = 3
-manifold_seed = jax.random.PRNGKey(0)
+seq_len = 50
+lr = "001"
+manifold_seed_val = 0
+init_seed_val = 0
+manifold_seed = jax.random.PRNGKey(manifold_seed_val)
+init_seed = jax.random.split(jax.random.PRNGKey(init_seed_val))[0]
+dtype = jnp.float32#jnp.bfloat16
+slope = 10
+tau = dtype(2.) ### change to 2. ####
+batch_sz = 128
+spike_fn = sl.fs(slope)
+n_iter = 5000 # 2000
+layer_name = 128
+update_time = 'offline'
+timing = 'time'
+if timing=='time':
+    t_name = 'time'
+    t = True
+elif timing == 'rate':
+    t_name = 'rate'
+    t = False
+if layer_name == 128:
+    layer_sz = lambda i: 128
+elif layer_name == 512:
+    layer_sz = lambda i: 512
+elif layer_name == 256:
+    layer_sz = lambda i: 256
+
 t = True
 output_size = 10
 dtype = jnp.float32
@@ -165,14 +187,14 @@ def get_surface(x, y, xdirection, ydirection, variables):
 
 
 params_end = load_params(
-    'randman_data/models/model_{}layer_{}_3dim_offline_20seqlen_{}iter_0manifold_{}seed_time_sub_fs_adamax_bfloat'.format(nlayers, layer_name, n_iter, seed))
+'randman_data/models/model_{}layer_{}_{}dim_{}_{}seqlen_{}iter_{}manifold_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_name,dim,update_time,seq_len,n_iter,manifold_seed_val,t_name,slope,lr,init_seed_val))
     #'data_final/models/model_{}layer_{}_3dim_20seqlen_{}iter_1sp_{}seed_time_sub_adamax'
 
 matrix = []
 for i in range(0,n_iter+200,200):
   for j in range(5):
     tmp = load_params(
-        'randman_data/models/model_{}layer_{}_3dim_offline_20seqlen_{}iter_0manifold_{}seed_time_sub_fs_adamax_bfloat'.format(nlayers, layer_name, i, seed))
+'randman_data/models/model_{}layer_{}_{}dim_{}_{}seqlen_{}iter_{}manifold_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_name,dim,update_time,seq_len,i,manifold_seed_val,t_name,slope,lr,init_seed_val))
     diff_tmp = jax.tree_map(lambda x, y: x - y, tmp[j], params_end[model_indicator])
     matrix.append(jnp.hstack([x.reshape(-1)
                   for x in jax.tree_util.tree_flatten(diff_tmp)[0]]))
@@ -204,7 +226,7 @@ for j in range(5):
   ycoord[j] = []
   for i in range(0,n_iter+200,200):
     tmp = load_params(
-        'randman_data/models/model_{}layer_{}_3dim_offline_20seqlen_{}iter_0manifold_{}seed_time_sub_fs_adamax_bfloat'.format(nlayers, layer_name, i, seed))
+'randman_data/models/model_{}layer_{}_{}dim_{}_{}seqlen_{}iter_{}manifold_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_name,dim,update_time,seq_len,i,manifold_seed_val,t_name,slope,lr,init_seed_val))
     diff_tmp = jax.tree_map(lambda x, y: x - y, tmp[j], params_end[model_indicator])
     diff_tmp = jnp.hstack([x.reshape(-1)
                           for x in jax.tree_util.tree_flatten(diff_tmp)[0]])
