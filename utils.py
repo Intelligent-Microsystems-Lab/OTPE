@@ -123,7 +123,8 @@ def offline_train_func(optimizer,model,params,carry,batch,opt_state):
     (carry,grad),(s,loss) = jax.lax.scan(p_apply_grad,(carry,grad),batch)
     #train_acc = jnp.mean(jnp.equal(jnp.argmax(jnp.sum(s,axis=0),axis=1),jnp.argmax(jnp.sum(batch[1],axis=0),axis=1)))
     
-    updates, opt_state = optimizer.update(grad,opt_state,params)
+    updates, opt_state = optimizer.update(grad,opt_state,params,extra_args={"loss": jnp.mean(loss)})
+    #updates, opt_state = optimizer.update(grad,opt_state,params)
     params = optax.apply_updates(params, updates)
 
     return jnp.mean(loss), grad, params, opt_state
@@ -153,7 +154,8 @@ def bp_train_func(optimizer,bp_model,params,carry,batch,opt_state):
     carry = tree_map(lambda x: jnp.stack([jnp.zeros_like(x[0])]*batch[0].shape[1]),carry)
     p_loss = Partial(bp_loss_fn,bp_model)
     grad,loss = jax.jacrev(p_loss,has_aux=True)(params,carry,(batch[0],batch[1]))
-    updates, opt_state = optimizer.update(grad,opt_state,params)
+    #updates, opt_state = optimizer.update(grad,opt_state,params)
+    updates, opt_state = optimizer.update(grad,opt_state,params,extra_args={"loss": loss})
     params = optax.apply_updates(params, updates)
 
     return loss, grad, params, opt_state
