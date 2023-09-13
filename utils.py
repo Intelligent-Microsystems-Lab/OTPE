@@ -101,6 +101,12 @@ def loss_fn(model,params,carry,b):
    loss = jnp.mean(optax.softmax_cross_entropy(s,b[1]))
    return loss,(carry,s,loss)
 
+def mix_loss_fn(model,params,carry,leak_s,b):
+   carry, s = model.apply(params,carry,b[0])
+   leak_s = leak_s + s
+   loss = jnp.mean(optax.softmax_cross_entropy(leak_s,b[1]))
+   return loss,(carry,s,loss,leak_s)
+
 def offline_apply_grad(seq_len,model,params,c,b):
     p_loss = Partial(loss_fn,model)
     grad,(carry,s,loss) = jax.jacrev(p_loss,has_aux=True)(params,c[0],b)
@@ -116,15 +122,23 @@ def online_apply_grad(optimizer,model,c,b):
     o_params = optax.apply_updates(o_params, updates)
     return (o_params,o_opt_state,o_carry),(s,loss)
 
+def mix_apply_grad(optimizer,model,c,b):
+    o_params, o_opt_state, o_carry, leak_s = c
+    p_loss = Partial(mix_loss_fn,model)
+    grad,(o_carry,s,loss,leak_s) = jax.jacrev(p_loss,has_aux=True)(o_params,o_carry,leak_s,b)
+    #grad = tree_map(lambda x,y: x+(y/seq_len),c[1],grad)
+    updates, o_opt_state = optimizer.update(grad,o_opt_state,o_params)
+    o_params = optax.apply_updates(o_params, updates)
+    return (o_params,o_opt_state,o_carry,leak_s),(s,loss)
+
 def offline_train_func(optimizer,model,params,carry,batch,opt_state):
     grad = tree_map(jnp.zeros_like,params)
     carry = tree_map(lambda x: jnp.stack([jnp.zeros_like(x[0])]*batch[0].shape[1]),carry)
     p_apply_grad = Partial(offline_apply_grad,batch[0].shape[0],model,params)
     (carry,grad),(s,loss) = jax.lax.scan(p_apply_grad,(carry,grad),batch)
-    #train_acc = jnp.mean(jnp.equal(jnp.argmax(jnp.sum(s,axis=0),axis=1),jnp.argmax(jnp.sum(batch[1],axis=0),axis=1)))
     
-    updates, opt_state = optimizer.update(grad,opt_state,params,extra_args={"loss": jnp.mean(loss)})
-    #updates, opt_state = optimizer.update(grad,opt_state,params)
+    #updates, opt_state = optimizer.update(grad,opt_state,params,extra_args={"loss": jnp.mean(loss)})
+    updates, opt_state = optimizer.update(grad,opt_state,params)
     params = optax.apply_updates(params, updates)
 
     return jnp.mean(loss), grad, params, opt_state
@@ -134,10 +148,15 @@ def online_train_func(optimizer,model,params,carry,batch,opt_state):
     carry = tree_map(lambda x: jnp.stack([jnp.zeros_like(x[0])]*batch[0].shape[1]),carry)
     p_apply_grad = Partial(online_apply_grad,optimizer,model)
     (params,opt_state,carry),(s,loss) = jax.lax.scan(p_apply_grad,(params,opt_state,carry),batch)
-    #train_acc = jnp.mean(jnp.equal(jnp.argmax(jnp.sum(s,axis=0),axis=1),jnp.argmax(jnp.sum(batch[1],axis=0),axis=1)))
     
-    #updates, opt_state = optimizer.update(grad,opt_state,params)
-    #params = optim.apply_updates(params, updates)
+    return jnp.mean(loss), grad, params, opt_state
+
+def mix_train_func(optimizer,model,params,carry,batch,opt_state):
+    grad = tree_map(jnp.zeros_like,params)
+    carry = tree_map(lambda x: jnp.stack([jnp.zeros_like(x[0])]*batch[0].shape[1]),carry)
+    p_apply_grad = Partial(mix_apply_grad,optimizer,model)
+    (params,opt_state,carry,leak_s),(s,loss) = jax.lax.scan(p_apply_grad,(params,opt_state,carry,jnp.zeros_like(batch[1])),batch)
+    
     return jnp.mean(loss), grad, params, opt_state
 
 def bp_loss_fn(bp_model,params,carry,b):
@@ -154,8 +173,8 @@ def bp_train_func(optimizer,bp_model,params,carry,batch,opt_state):
     carry = tree_map(lambda x: jnp.stack([jnp.zeros_like(x[0])]*batch[0].shape[1]),carry)
     p_loss = Partial(bp_loss_fn,bp_model)
     grad,loss = jax.jacrev(p_loss,has_aux=True)(params,carry,(batch[0],batch[1]))
-    #updates, opt_state = optimizer.update(grad,opt_state,params)
-    updates, opt_state = optimizer.update(grad,opt_state,params,extra_args={"loss": loss})
+    updates, opt_state = optimizer.update(grad,opt_state,params)
+    #updates, opt_state = optimizer.update(grad,opt_state,params,extra_args={"loss": loss})
     params = optax.apply_updates(params, updates)
 
     return loss, grad, params, opt_state
@@ -267,17 +286,16 @@ def online_sim_train_func(OTTTmodel,
     Approx_OTPE_train = Partial(online_train_func,optimizer,Approx_OTPEmodel)
     OSTL_train = Partial(online_train_func,optimizer,OSTLmodel)
     OTPE_train = Partial(online_train_func,optimizer,OTPEmodel)
-    
 
-    OTTT_loss, ottt_grad, all_params[0], all_opt[0] = OTTT_train(all_params[0],carry,batch,all_opt[0])
-    Approx_OTPE_loss, ottt2_grad, all_params[1], all_opt[1] = Approx_OTPE_train(all_params[1],carry,batch,all_opt[1])
-    OSTL_loss, osj_grad, all_params[2], all_opt[2] = OSTL_train(all_params[2],carry,batch,all_opt[2])
-    OTPE_loss, osj2_grad, all_params[3], all_opt[3] = OTPE_train(all_params[3],carry,batch,all_opt[3])
+    OTTT_loss, _, all_params[0], all_opt[0] = OTTT_train(all_params[0],carry,batch,all_opt[0])
+    Approx_OTPE_loss, _, all_params[1], all_opt[1] = Approx_OTPE_train(all_params[1],carry,batch,all_opt[1])
+    OSTL_loss, _, all_params[2], all_opt[2] = OSTL_train(all_params[2],carry,batch,all_opt[2])
+    OTPE_loss, _, all_params[3], all_opt[3] = OTPE_train(all_params[3],carry,batch,all_opt[3])
 
     OTTT_acc = test_func(OTTTmodel,all_params[0],test_carry,(test_data,test_labels))
     Approx_OTPE_acc = test_func(Approx_OTPEmodel,all_params[1],test_carry,(test_data,test_labels))
     OSTL_acc = test_func(OSTLmodel,all_params[2],test_carry,(test_data,test_labels))
-    OTPE_acc = test_func(OTPEmodel,all_params[3],test_carry,(test_data,test_labels))
+    OTPE_acc = test_func(OTTTmodel,all_params[3],test_carry,(test_data,test_labels))
 
     all_acc = (OTTT_acc,Approx_OTPE_acc,OSTL_acc,OTPE_acc)
     all_loss = (OTTT_loss, Approx_OTPE_loss, OSTL_loss, OTPE_loss)

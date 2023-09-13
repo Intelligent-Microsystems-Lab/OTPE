@@ -4,7 +4,7 @@
 import pickle
 
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+#os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 os.environ['TF_CUDNN_DETERMINISTIC']='1'
 import jax
 import jax.numpy as jnp
@@ -28,11 +28,11 @@ import tonic
 torch.manual_seed(0)
 np.random.seed(0)
 output_size = 20
-nlayers = 5
+nlayers = 3
 dim = 3
 seq_len = 50
-slope = 25
-lr = "0001"
+slope = 5 # have not run 50 yet
+lr = "001"
 manifold_seed_val = 0
 init_seed_val = 3
 manifold_seed = jax.random.PRNGKey(manifold_seed_val)
@@ -42,16 +42,18 @@ tau = dtype(2.)
 batch_sz = 128
 spike_fn = sl.fs(slope)
 n_iter = 10000
-layer_name = 256
-update_time = 'online'
+layer_name = 384
+update_time = 'offline'
 if layer_name == 128:
     layer_sz = lambda i: 128
 elif layer_name == 512:
     layer_sz = lambda i: 512
 elif layer_name == 256:
     layer_sz = lambda i: 256
+elif layer_name == 384:
+    layer_sz = lambda i: 384
 
-optimizer = optax.adamax(dtype(0.0001))
+optimizer = optax.adamax(dtype(0.001))
 
 
 # In[3]:
