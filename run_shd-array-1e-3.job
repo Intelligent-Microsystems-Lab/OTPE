@@ -1,0 +1,8 @@
+#!/bin/bash
+#$ -q gpu@@joshi
+#$ -l gpu_card=1
+#$ -N s5125n25_1       # s=SHD, 5125 = 5 layers of 512, n=online; slope, _1 = 1e-3, 01 = 1e-4
+#$ -t 1-4              # Specify number of tasks in array
+conda activate jax
+cd OTPE
+python generate_SHD_data.py $SGE_TASK_ID 4

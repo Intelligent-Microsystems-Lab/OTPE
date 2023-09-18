@@ -301,3 +301,51 @@ def online_sim_train_func(OTTTmodel,
     all_loss = (OTTT_loss, Approx_OTPE_loss, OSTL_loss, OTPE_loss)
 
     return all_loss, all_acc, all_params, all_opt, key
+
+def online_front_train_func(OTTTmodel,
+                       Approx_OTPEmodel,
+                       OSTLmodel,
+                       OTPEmodel,
+                       fApprox_OTPEmodel,
+                       fOTPEmodel, 
+                       optimizer,
+                       carry,
+                       test_carry,
+                       test_data,
+                       test_labels,
+                       batch_sz,
+                       gen_data,
+                       all_params,
+                       all_opt,
+                       key):
+
+    key,_ = jax.random.split(key,num=2)
+    train_data, train_labels = gen_data(seed2=key)
+    batch = (train_data[:,:batch_sz],train_labels[:,:batch_sz])
+
+    OTTT_train = Partial(online_train_func,optimizer,OTTTmodel)
+    Approx_OTPE_train = Partial(online_train_func,optimizer,Approx_OTPEmodel)
+    OSTL_train = Partial(online_train_func,optimizer,OSTLmodel)
+    OTPE_train = Partial(online_train_func,optimizer,OTPEmodel)
+    fApprox_OTPE_train = Partial(online_train_func,optimizer,fApprox_OTPEmodel)
+    fOTPE_train = Partial(online_train_func,optimizer,fOTPEmodel)
+    
+
+    OTTT_loss, _, all_params[0], all_opt[0] = OTTT_train(all_params[0],carry,batch,all_opt[0])
+    Approx_OTPE_loss, _, all_params[1], all_opt[1] = Approx_OTPE_train(all_params[1],carry,batch,all_opt[1])
+    OSTL_loss, _, all_params[2], all_opt[2] = OSTL_train(all_params[2],carry,batch,all_opt[2])
+    OTPE_loss, _, all_params[3], all_opt[3] = OTPE_train(all_params[3],carry,batch,all_opt[3])
+    fApprox_OTPE_loss, _, all_params[4], all_opt[4] = fApprox_OTPE_train(all_params[4],carry,batch,all_opt[4])
+    fOTPE_loss, _, all_params[5], all_opt[5] = fOTPE_train(all_params[5],carry,batch,all_opt[5])
+
+    OTTT_acc = test_func(OTTTmodel,all_params[0],test_carry,(test_data,test_labels))
+    Approx_OTPE_acc = test_func(OTTTmodel,all_params[1],test_carry,(test_data,test_labels))
+    OSTL_acc = test_func(OTTTmodel,all_params[2],test_carry,(test_data,test_labels))
+    OTPE_acc = test_func(OTTTmodel,all_params[3],test_carry,(test_data,test_labels))
+    fApprox_OTPE_acc = test_func(OTTTmodel,all_params[4],test_carry,(test_data,test_labels))
+    fOTPE_acc = test_func(OTTTmodel,all_params[5],test_carry,(test_data,test_labels))
+
+    all_acc = (OTTT_acc,Approx_OTPE_acc,OSTL_acc,OTPE_acc,fApprox_OTPE_acc,fOTPE_acc)
+    all_loss = (OTTT_loss, Approx_OTPE_loss, OSTL_loss, OTPE_loss,fApprox_OTPE_loss,fOTPE_loss)
+
+    return all_loss, all_acc, all_params, all_opt, key

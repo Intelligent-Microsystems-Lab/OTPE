@@ -1,0 +1,8 @@
+#!/bin/bash
+#$ -q gpu
+#$ -l gpu_card=1
+#$ -N Randman        # Specify job name
+#$ -t 1-8              # Specify number of tasks in array
+conda activate jax
+cd OTPE
+python generate_randman_data.py $SGE_TASK_ID

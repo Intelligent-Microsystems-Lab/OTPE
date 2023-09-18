@@ -1,0 +1,8 @@
+#!/bin/bash
+#$ -q gpu
+#$ -l gpu_card=1
+#$ -N SHD512_5on25_4e-4        # Specify job name
+#$ -t 1-4              # Specify number of tasks in array
+conda activate jax
+cd OTPE
+python generate_SHD_data.py $SGE_TASK_ID 2

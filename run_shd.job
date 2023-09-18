@@ -1,7 +1,8 @@
 #!/bin/bash
-#$ -q gpu
+#$ -q gpu@@joshi
 #$ -l gpu_card=1
-#$ -N SHD       # Specify job name
+#$ -N s1285f5_1       # Specify job name
+
 conda activate jax
 cd OTPE
-python generate_SHD_data.py
+python generate_SHD_data.py 3 4

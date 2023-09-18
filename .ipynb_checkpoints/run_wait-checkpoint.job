@@ -1,0 +1,8 @@
+#!/bin/bash
+#$ -q gpu@qa-2080ti-001.crc.nd.edu
+#$ -l gpu_card=1
+#$ -N wait       # Specify job name
+
+conda activate jax
+cd OTPE
+python wait.py
