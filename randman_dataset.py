@@ -25,10 +25,6 @@ def make_spiking_dataset(nb_classes=10, nb_units=100, nb_steps=100, dim_manifold
         shuffe: Whether to shuffle the dataset
         classification: Whether to generate a classification (default) or regression dataset
         seed: The random seed (default: None)
-    Returns: 
-        A tuple of data,labels. The data is structured as numpy array 
-        (sample x event x 2 ) where the last dimension contains 
-        the relative [0,1] (time,unit) coordinates and labels.
     """
   
     data = []

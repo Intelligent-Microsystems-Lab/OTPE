@@ -1,7 +1,0 @@
-#!/bin/bash
-#$ -q gpu
-#$ -l gpu_card=1
-#$ -N SHD       # Specify job name
-conda activate jax
-cd OTPE
-python generate_SHD_data.py

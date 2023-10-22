@@ -7,6 +7,9 @@ from randman_dataset import make_spiking_dataset
 import randman_dataset as rd
 from utils import gen_test_data, cos_sim_train_func, online_sim_train_func, custom_snn, bp_snn
 
+import matplotlib as mpl
+import matplotlib.font_manager as fm
+
 import pickle
 import spiking_learning as sl
 import optax
@@ -20,7 +23,7 @@ import seaborn as sb
 os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 
-utput_size = 10
+output_size = 10
 nlayers = 3
 dim = 3
 seq_len = 50
@@ -30,14 +33,14 @@ init_seed_val = 0
 manifold_seed = jax.random.PRNGKey(manifold_seed_val)
 init_seed = jax.random.split(jax.random.PRNGKey(init_seed_val))[0]
 dtype = jnp.float32#jnp.bfloat16
-slope = 10
+slope = 25
 tau = dtype(2.) ### change to 2. ####
 batch_sz = 128
 spike_fn = sl.fs(slope)
-n_iter = 5000 # 2000
+n_iter = 20000 # 2000
 layer_name = 128
 update_time = 'offline'
-timing = 'time'
+timing = 'rate'
 if timing=='time':
     t_name = 'time'
     t = True
@@ -51,7 +54,7 @@ elif layer_name == 512:
 elif layer_name == 256:
     layer_sz = lambda i: 256
 
-t = True
+#t = True
 output_size = 10
 dtype = jnp.float32
 seed = 0
@@ -128,9 +131,6 @@ def project2d(d, dx, dy, proj_method):
     x = project1d(d, dx)
     y = project1d(d, dy)
   elif proj_method == "lstsq":
-    # TODO @clee1994 try this!
-    # raise NotImplementedError
-    # solve the least squre problem: Ax = d
     A = np.vstack([dx, dy]).T
     [x, y] = np.linalg.lstsq(A, d)[0]
 
@@ -276,7 +276,8 @@ xv, yv, zv = get_surface(x, y, xdirection, ydirection, params_end[model_indicato
 font_size = 23
 gen_lw = 8
 
-plt.rc("font", family="Helvetica", weight="bold")
+#plt.rc("font", family="Helvetica", weight="bold")
+plt.rc("font", weight="bold")
 fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(14.4, 8.5))
 
 #ax.set_title(
@@ -322,5 +323,5 @@ ax.set_ylabel(
 
 plt.tight_layout()
 #plt.savefig("ll_offline_3_128"+str(model_indicator)+".png", dpi=300, bbox_inches="tight")
-plt.savefig("randman_ll_offline_{}_{}_0".format(nlayers,layer_name)+".png", dpi=300, bbox_inches="tight")
+plt.savefig("plots/randman_ll_rate_offline_{}_{}_0".format(nlayers,layer_name)+".svg", dpi=300, bbox_inches="tight")
 plt.close()

@@ -1,7 +1,3 @@
-
-# IMSL Lab - University of Notre Dame
-# Author: Clemens JS Schaefer
-
 import functools
 
 
@@ -71,50 +67,6 @@ Returns:
     return x
 
   return init
-
-
-@jax.custom_vjp
-def atan(x):
-  # if not dtype float grad ops wont work
-  return jnp.array(x >= 0.0, dtype=x.dtype)
-
-
-def atan_fwd(x):
-  return atan(x), x
-
-
-def atan_bwd(res, g):
-  # from spiking jelly
-
-  x = res
-  alpha = 2
-
-  shared_c = g / (1 + (alpha * jnp.pi / 2 * x) ** 2)
-  return (alpha / 2 * shared_c,)
-  #return (g / ((1 + (alpha * jnp.pi / 2 * x) ** 2)*jnp.pi),)
-
-
-atan.defvjp(atan_fwd, atan_bwd)
-
-# @jax.custom_vjp
-# def fast_sigmoid(x):
-#   # if not dtype float grad ops wont work
-#   return jnp.array(x >= 0.0, dtype=x.dtype)
-
-
-# def fast_sigmoid_fwd(x):
-#   return fast_sigmoid(x), x
-
-
-# def fast_sigmoid_bwd(res, g):
-#   x = res
-#   alpha = 10
-
-#   scale = 1 / (alpha * jnp.abs(x) + 1.0) ** 2
-#   return (g * scale,)
-
-
-# fast_sigmoid.defvjp(fast_sigmoid_fwd, fast_sigmoid_bwd)
 
 def fs(slope):
 

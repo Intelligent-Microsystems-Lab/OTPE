@@ -1,3 +1,4 @@
+
 # In[1]:
 
 
@@ -5,38 +6,44 @@ import pickle
 import sys
 
 import os
-#os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+#os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 os.environ['TF_CUDNN_DETERMINISTIC']='1'
 import jax
 import jax.numpy as jnp
 
 import optax
-from OTPE import OSTL, OTTT, OTPE, Approx_OTPE
+from OTPE import OSTL, OTTT, OTPE, Approx_OTPE, OTPE_front, Approx_OTPE_front
 
 from jax.tree_util import Partial, tree_map, tree_leaves, tree_structure, tree_unflatten
 import spiking_learning as sl
 
 import randman_dataset as rd
 import numpy as np
-from utils import gen_test_data, cos_sim_train_func, online_sim_train_func, test_func, custom_snn, bp_snn
+from utils import gen_test_data, cos_sim_train_func, online_front_train_func, test_func, custom_snn, bp_snn
 import torch
 import tonic
 
 
 # In[2]:
-#lr_ind,seed_ind = np.unravel_index(int(sys.argv[1])-1,(,4))
+
 
 torch.manual_seed(0)
 np.random.seed(0)
-######################### SETTINGS #####################
+
+
+################## SETTINGS #########################
+#lr_ind,seed_ind = np.unravel_index(int(sys.argv[1])-1,(2,4))
+lr_ind = 0
+
+
 output_size = 20
 nlayers = 3
 dim = 3
 seq_len = 50
 slope = 25
-lr = '001'
+lr = ['4e-5','25e-6','1e-5','85e-7'][lr_ind]#['001','00085','0007','00055','0004','00025','0001','000085','00007','000055'][lr_ind]
 manifold_seed_val = 0
-init_seed_val = 0#int(sys.argv[1])-1#seed_ind
+init_seed_val = 0#seed_ind
 manifold_seed = jax.random.PRNGKey(manifold_seed_val)
 init_seed = jax.random.split(jax.random.PRNGKey(init_seed_val))[0]
 dtype = jnp.float32#jnp.bfloat16
@@ -44,20 +51,19 @@ tau = dtype(2.)
 batch_sz = 128
 spike_fn = sl.fs(slope)
 n_iter = 10000
-layer_name = 512
-update_time = 'offline'
+layer_name = [128,512][1]
+update_time = 'online'
 if layer_name == 128:
     layer_sz = lambda i: 128
 elif layer_name == 512:
     layer_sz = lambda i: 512
 elif layer_name == 256:
     layer_sz = lambda i: 256
-elif layer_name == 384:
-    layer_sz = lambda i: 384
 
-optimizer = optax.adamax(dtype(0.001))
+optimizer = optax.adamax(dtype([4e-5,25e-6,1e-5,85e-7][lr_ind]))#[0.001,0.00085,0.0007,0.00055,0.0004,0.00025,0.0001,0.000085,0.00007,0.000055][lr_ind]))
 
-#-------------------------------------------------
+#------------------------------------------------------------------#
+
 # In[3]:
 
 
@@ -147,9 +153,11 @@ OTTTmodel = custom_snn(output_sz=output_size, n_layers=nlayers, mod1=OTTT, mod2=
 OSTLmodel = custom_snn(output_sz=output_size, n_layers=nlayers, mod1=OSTL, mod2=OSTL, spike_fn=spike_fn, layer_sz=layer_sz, dtype=dtype)
 OTPEmodel = custom_snn(output_sz=output_size, n_layers=nlayers, mod1=OSTL, mod2=OTPE, spike_fn=spike_fn, layer_sz=layer_sz, dtype=dtype)
 Approx_OTPEmodel = custom_snn(output_sz=output_size, n_layers=nlayers, mod1=OTTT, mod2=Approx_OTPE, spike_fn=spike_fn, layer_sz=layer_sz, dtype=dtype)
+fOTPEmodel = custom_snn(output_sz=output_size, n_layers=nlayers, mod1=OTPE_front, mod2=OTPE, spike_fn=spike_fn, layer_sz=layer_sz, dtype=dtype)
+fApprox_OTPEmodel = custom_snn(output_sz=output_size, n_layers=nlayers, mod1=Approx_OTPE_front, mod2=Approx_OTPE, spike_fn=spike_fn, layer_sz=layer_sz, dtype=dtype)
 carry = [OTPE.initialize_carry(dtype=dtype)]*nlayers
-params = OTPEmodel.init(init_seed,carry,train_data[0,:batch_sz])
-carry,s = OTPEmodel.apply(params,carry,train_data[0,:batch_sz])
+params = fOTPEmodel.init(init_seed,carry,train_data[0,:batch_sz])
+carry,s = fOTPEmodel.apply(params,carry,train_data[0,:batch_sz])
 opt_state = optimizer.init(params)
 orig_params = params
 
@@ -167,14 +175,14 @@ test_carry,_ = OTPEmodel.apply(params,test_carry,test_data[0])
 # In[12]:
 
 
-bp_model = bp_snn(output_sz=output_size, n_layers=nlayers, spike_fn=spike_fn, layer_sz=layer_sz, dtype=dtype)
-bp_carry = carry
-bp_params = bp_model.init(init_seed,bp_carry,train_data[0,:batch_sz])
-struct = tree_structure(bp_params)
-bp_params = tree_unflatten(struct,tree_leaves(orig_params))
+# bp_model = bp_snn(output_sz=output_size, n_layers=nlayers, spike_fn=spike_fn, layer_sz=layer_sz, dtype=dtype)
+# bp_carry = carry
+# bp_params = bp_model.init(init_seed,bp_carry,train_data[0,:batch_sz])
+# struct = tree_structure(bp_params)
+# bp_params = tree_unflatten(struct,tree_leaves(orig_params))
 
-bp_carry,s = bp_model.apply(bp_params,bp_carry,train_data[0,:batch_sz])
-bp_opt_state = optimizer.init(bp_params)
+# bp_carry,s = bp_model.apply(bp_params,bp_carry,train_data[0,:batch_sz])
+# bp_opt_state = optimizer.init(bp_params)
 
 
 # In[13]:
@@ -193,41 +201,43 @@ cos = []
 cos_per = []
 val_acc = []
 train_loss = []
-all_params = [params]*4
-all_params.append(bp_params)
-all_opt = [opt_state]*4
-all_opt.append(bp_opt_state)
+all_params = [params]*6
+# all_params.append(bp_params)
+all_opt = [opt_state]*6
+# all_opt.append(bp_opt_state)
 best_params = tree_map(jnp.zeros_like,all_params)
-best_val = [0]*4
-if update_time == 'offline':
-    best_val.append(0)
+best_val = [0]*6
+# if update_time == 'offline':
+#     best_val.append(0)
 
 
 # In[15]:
 
 
-offline_training = jax.jit(Partial(cos_sim_train_func,OTTTmodel,
-                       Approx_OTPEmodel,
-                       OSTLmodel,
-                       OTPEmodel,
-                       bp_model,
-                       optimizer,
-                       carry,
-                       val_carry,
-                       val_data,
-                       val_labels,
-                       batch_sz,
-                       gen_data
-                       ))
+# offline_training = jax.jit(Partial(cos_sim_train_func,OTTTmodel,
+#                        Approx_OTPEmodel,
+#                        Mixmodel,
+#                        OTPEmodel,
+#                        bp_model,
+#                        optimizer,
+#                        carry,
+#                        val_carry,
+#                        val_data,
+#                        val_labels,
+#                        batch_sz,
+#                        gen_data
+#                        ))
 
 
 # In[16]:
 
 
-online_training = jax.jit(Partial(online_sim_train_func,OTTTmodel,
+online_training = jax.jit(Partial(online_front_train_func,OTTTmodel,
                        Approx_OTPEmodel,
                        OSTLmodel,
                        OTPEmodel,
+                       fApprox_OTPEmodel,
+                       fOTPEmodel,
                        optimizer,
                        carry,
                        val_carry,
@@ -250,17 +260,17 @@ online_training = jax.jit(Partial(online_sim_train_func,OTTTmodel,
 
 for epoch in range(n_iter):        
     
-    if update_time == 'offline':
+    # if update_time == 'offline':
 
-        all_loss, all_cosines, all_cosines_per, all_acc, all_params, all_opt, key = offline_training(all_params,all_opt,key)
+    #     all_loss, all_cosines, all_cosines_per, all_acc, all_params, all_opt, key = offline_training(all_params,all_opt,key)
         
 
-        cos.append(np.stack(list(tree_map(jnp.float32,all_cosines))))
-        cos_per.append(np.stack(list((tree_map(jnp.float32,all_cosines_per)))))
+    #     cos.append(np.stack(list(tree_map(jnp.float32,all_cosines))))
+    #     cos_per.append(np.stack(list((tree_map(jnp.float32,all_cosines_per)))))
     
-    elif update_time == 'online':
+    # elif update_time == 'online':
 
-        all_loss, all_acc, all_params, all_opt, key = online_training(all_params,all_opt,key)
+    all_loss, all_acc, all_params, all_opt, key = online_training(all_params,all_opt,key)
 
 
     val_acc.append(np.stack(list(tree_map(jnp.float32,all_acc))))
@@ -296,24 +306,25 @@ for epoch in range(n_iter):
 
 
 OTTT_acc = test_func(OTTTmodel,best_params[0],test_carry,(test_data,test_labels))
-Approx_OTPE_acc = test_func(Approx_OTPEmodel,best_params[1],test_carry,(test_data,test_labels))
-OSTL_acc = test_func(OSTLmodel,best_params[2],test_carry,(test_data,test_labels))
-OTPE_acc = test_func(OTPEmodel,best_params[3],test_carry,(test_data,test_labels))
-bp_acc = test_func(bp_model,best_params[4],test_carry,(test_data,test_labels))
+Approx_OTPE_acc = test_func(OTTTmodel,best_params[1],test_carry,(test_data,test_labels))
+OSTL_acc = test_func(OTTTmodel,best_params[2],test_carry,(test_data,test_labels))
+OTPE_acc = test_func(OTTTmodel,best_params[3],test_carry,(test_data,test_labels))
+fApprox_OTPE_acc = test_func(OTTTmodel,best_params[4],test_carry,(test_data,test_labels))
+fOTPE_acc = test_func(OTTTmodel,best_params[5],test_carry,(test_data,test_labels))
 
-all_acc = (OTTT_acc,Approx_OTPE_acc,OSTL_acc,OTPE_acc,bp_acc)
+all_acc = (OTTT_acc,Approx_OTPE_acc,OSTL_acc,OTPE_acc,fApprox_OTPE_acc,fOTPE_acc)
 
 val_acc.append(np.stack(list(tree_map(jnp.float32,all_acc))))
 if update_time == 'online':
-    val_acc[-1] = val_acc[-1][0:4]
+    val_acc[-1] = val_acc[-1][0:6]
 print(val_acc[-1])
 
 
 # In[21]:
 
 
-np.save('SHD_data/layer_cosine_similarity/sim_{}layer_{}_{}dim_{}seqlen_{}iter_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_name,dim,seq_len,n_iter,update_time,slope,lr,init_seed_val),cos_per)
-np.save('SHD_data/model_cosine_similarity/sim_{}layer_{}_{}dim_{}seqlen_{}iter_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_name,dim,seq_len,n_iter,update_time,slope,lr,init_seed_val),cos)
-np.save('SHD_data/accuracy/sim_{}layer_{}_{}dim_{}seqlen_{}iter_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_name,dim,seq_len,n_iter,update_time,slope,lr,init_seed_val),val_acc)
-np.save('SHD_data/loss/sim_{}layer_{}_{}dim_{}seqlen_{}iter_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_name,dim,seq_len,n_iter,update_time,slope,lr,init_seed_val),train_loss)
+np.save('SHD_data/layer_cosine_similarity/sim_{}layer_{}_{}dim_{}seqlen_{}iter_{}_sub_{}fs_adamax_front_lr{}_{}seed'.format(nlayers,layer_name,dim,seq_len,n_iter,update_time,slope,lr,init_seed_val),cos_per)
+np.save('SHD_data/model_cosine_similarity/sim_{}layer_{}_{}dim_{}seqlen_{}iter_{}_sub_{}fs_adamax_front_lr{}_{}seed'.format(nlayers,layer_name,dim,seq_len,n_iter,update_time,slope,lr,init_seed_val),cos)
+np.save('SHD_data/accuracy/sim_{}layer_{}_{}dim_{}seqlen_{}iter_{}_sub_{}fs_adamax_front_lr{}_{}seed'.format(nlayers,layer_name,dim,seq_len,n_iter,update_time,slope,lr,init_seed_val),val_acc)
+np.save('SHD_data/loss/sim_{}layer_{}_{}dim_{}seqlen_{}iter_{}_sub_{}fs_adamax_front_lr{}_{}seed'.format(nlayers,layer_name,dim,seq_len,n_iter,update_time,slope,lr,init_seed_val),train_loss)
 
