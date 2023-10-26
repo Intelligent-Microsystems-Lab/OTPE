@@ -1,11 +1,6 @@
 # In[1]:
 
-
-import pickle
-import sys
-
 import os
-#os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 os.environ['TF_CUDNN_DETERMINISTIC']='1'
 import jax
 import jax.numpy as jnp
@@ -16,65 +11,40 @@ from OTPE import OSTL, OTTT, OTPE, Approx_OTPE
 from jax.tree_util import Partial, tree_map, tree_leaves, tree_structure, tree_unflatten
 import spiking_learning as sl
 
-import randman_dataset as rd
 import numpy as np
-from utils import gen_test_data, cos_sim_train_func, online_sim_train_func, test_func, custom_snn, bp_snn
+from utils import cos_sim_train_func, online_sim_train_func, test_func, custom_snn, bp_snn
 import torch
 import tonic
 
 
 # In[2]:
-#lr_ind,seed_ind = np.unravel_index(int(sys.argv[1])-1,(,4))
 
 torch.manual_seed(0)
 np.random.seed(0)
-######################### SETTINGS #####################
+
 output_size = 20
 nlayers = 3
-dim = 3
 seq_len = 50
 slope = 25
 lr = '001'
-manifold_seed_val = 0
-init_seed_val = 0#int(sys.argv[1])-1#seed_ind
-manifold_seed = jax.random.PRNGKey(manifold_seed_val)
+init_seed_val = 0
 init_seed = jax.random.split(jax.random.PRNGKey(init_seed_val))[0]
-dtype = jnp.float32#jnp.bfloat16
+dtype = jnp.float32
 tau = dtype(2.)
 batch_sz = 128
 spike_fn = sl.fs(slope)
 n_iter = 10000
-layer_name = 512
+layer_sz = 512
 update_time = 'offline'
-if layer_name == 128:
-    layer_sz = lambda i: 128
-elif layer_name == 512:
-    layer_sz = lambda i: 512
-elif layer_name == 256:
-    layer_sz = lambda i: 256
-elif layer_name == 384:
-    layer_sz = lambda i: 384
 
 optimizer = optax.adamax(dtype(0.001))
 
-#-------------------------------------------------
 # In[3]:
 
 
 sensor_size = tonic.datasets.SHD.sensor_size
 train = tonic.datasets.SHD('data',train=True,transform=tonic.transforms.ToFrame(sensor_size=sensor_size,n_time_bins=seq_len))
 test = tonic.datasets.SHD('data',train=False,transform=tonic.transforms.ToFrame(sensor_size=sensor_size,n_time_bins=seq_len))
-
-
-# In[4]:
-
-
-# train_data = jnp.load('data/train_data.npy')
-# train_labels = jnp.load('data/train_labels.npy')
-# test_data = jnp.load('data/test_data.npy')
-# test_labels = jnp.load('data/test_labels.npy')
-# val_data = jnp.load('data/val_data.npy')
-# val_labels = jnp.load('data/val_labels.npy')
 
 
 # In[5]:
@@ -121,23 +91,6 @@ for i in range(len(test)):
 test_data = dtype(jnp.concatenate(test_data,axis=1))
 test_labels = dtype(jax.nn.one_hot(jnp.stack(test_labels),output_size))
 test_labels = jnp.tile(jnp.expand_dims(test_labels,axis=2),seq_len).transpose(2,0,1)
-
-
-# In[8]:
-
-
-# jnp.save('data/train_data.npy',train_data)
-# jnp.save('data/train_labels.npy',train_labels)
-# jnp.save('data/test_data.npy',test_data)
-# jnp.save('data/test_labels.npy',test_labels)
-# jnp.save('data/val_data.npy',val_data)
-# jnp.save('data/val_labels.npy',val_labels)
-
-
-# In[9]:
-
-
-carry = [OTPE.initialize_carry(dtype=dtype)]*nlayers
 
 
 # In[10]:
@@ -189,14 +142,14 @@ test_carry = tree_map(lambda x: jnp.zeros_like(x,dtype),test_carry)
 
 
 key = jax.random.split(init_seed)[0]
-cos = []
-cos_per = []
+cosine_similarity = []
+cosine_similarity_layer = []
 val_acc = []
 train_loss = []
 all_params = [params]*4
 all_params.append(bp_params)
-all_opt = [opt_state]*4
-all_opt.append(bp_opt_state)
+all_opt_states = [opt_state]*4
+all_opt_states.append(bp_opt_state)
 best_params = tree_map(jnp.zeros_like,all_params)
 best_val = [0]*4
 if update_time == 'offline':
@@ -241,9 +194,12 @@ online_training = jax.jit(Partial(online_sim_train_func,OTTTmodel,
 # In[17]:
 
 
-# with open('SHD_data/models/model_{}layer_{}_{}dim_{}seqlen_{}iter_{}seed_{}_sub_{}fs_adamax_lr{}'.format(nlayers,layer_name,dim,seq_len,0,init_seed_val,update_time,slope,lr),'wb') as file:
+#-------------- uncomment to save inital model parameters --------------#
+
+# with open('SHD_data/models/model_{}layer_{}_{}seqlen_{}iter_{}seed_{}_sub_{}fs_adamax_lr{}'.format(nlayers,layer_sz,seq_len,0,init_seed_val,update_time,slope,lr),'wb') as file:
 #            pickle.dump(tree_map(jnp.float32,all_params),file,protocol=pickle.HIGHEST_PROTOCOL)
 
+#-----------------------------------------------------------------------#
 
 # In[18]:
 
@@ -252,46 +208,47 @@ for epoch in range(n_iter):
     
     if update_time == 'offline':
 
-        all_loss, all_cosines, all_cosines_per, all_acc, all_params, all_opt, key = offline_training(all_params,all_opt,key)
+        all_loss, all_cosines, all_cosines_per, all_acc, all_params, all_opt_states, key = offline_training(all_params,all_opt_states,key)
         
 
-        cos.append(np.stack(list(tree_map(jnp.float32,all_cosines))))
-        cos_per.append(np.stack(list((tree_map(jnp.float32,all_cosines_per)))))
+        cosine_similarity.append(np.stack(list(tree_map(jnp.float32,all_cosines))))
+        cosine_similarity_layer.append(np.stack(list((tree_map(jnp.float32,all_cosines_per)))))
     
     elif update_time == 'online':
 
-        all_loss, all_acc, all_params, all_opt, key = online_training(all_params,all_opt,key)
+        all_loss, all_acc, all_params, all_opt_states, key = online_training(all_params,all_opt_states,key)
 
 
     val_acc.append(np.stack(list(tree_map(jnp.float32,all_acc))))
-
     train_loss.append(np.stack(list(tree_map(jnp.float32,all_loss))))
     
-    #print(epoch)
-    #print(val_acc[-1])
-        #print(cos[-1])
-        #print(cos_per[-1])
-        #print(all_cosines_per)
     
-    truth = np.greater(val_acc[-1],best_val).squeeze()
-    best_val = np.where(truth,val_acc[-1],best_val)
+    is_best = np.greater(val_acc[-1],best_val).squeeze()
+    best_val = np.where(is_best,val_acc[-1],best_val)
     
     for i in range(len(best_val)):
-        if truth[i]:
+        if is_best[i]:
             best_params[i] = all_params[i]
+
+
+        #-------------- uncomment for saving model parameters --------------#
     
         # if (epoch+1)%200 == 0: #200
-        #     with open('SHD_data/models/model_{}layer_{}_{}dim_{}seqlen_{}iter_{}seed_{}_sub_{}fs_adamax_lr{}'.format(nlayers,layer_name,dim,seq_len,epoch+1,init_seed_val,update_time,slope,lr),'wb') as file:
+        #     with open('SHD_data/models/model_{}layer_{}_{}seqlen_{}iter_{}seed_{}_sub_{}fs_adamax_lr{}'.format(nlayers,layer_sz,seq_len,epoch+1,init_seed_val,update_time,slope,lr),'wb') as file:
         #         pickle.dump(tree_map(jnp.float32,all_params),file,protocol=pickle.HIGHEST_PROTOCOL)
+        
+        #-------------------------------------------------------------------#
 
 
 # In[19]:
 
 
-# with open('SHD_data/models/model_{}layer_{}_{}dim_{}seqlen_best_{}seed_{}_sub_{}fs_adamax_lr{}'.format(nlayers,layer_name,dim,seq_len,init_seed_val,t_name,slope,lr),'wb') as file:
+#----------------- uncomment to save best model --------------------#
+
+# with open('SHD_data/models/model_{}layer_{}_{}seqlen_best_{}seed_{}_sub_{}fs_adamax_lr{}'.format(nlayers,layer_sz,seq_len,init_seed_val,t_name,slope,lr),'wb') as file:
 #     pickle.dump(tree_map(jnp.float32,best_params),file,protocol=pickle.HIGHEST_PROTOCOL)
 
-
+#-------------------------------------------------------------------#
 # In[20]:
 
 
@@ -306,14 +263,13 @@ all_acc = (OTTT_acc,Approx_OTPE_acc,OSTL_acc,OTPE_acc,bp_acc)
 val_acc.append(np.stack(list(tree_map(jnp.float32,all_acc))))
 if update_time == 'online':
     val_acc[-1] = val_acc[-1][0:4]
-print(val_acc[-1])
 
 
 # In[21]:
 
 
-np.save('SHD_data/layer_cosine_similarity/sim_{}layer_{}_{}dim_{}seqlen_{}iter_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_name,dim,seq_len,n_iter,update_time,slope,lr,init_seed_val),cos_per)
-np.save('SHD_data/model_cosine_similarity/sim_{}layer_{}_{}dim_{}seqlen_{}iter_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_name,dim,seq_len,n_iter,update_time,slope,lr,init_seed_val),cos)
-np.save('SHD_data/accuracy/sim_{}layer_{}_{}dim_{}seqlen_{}iter_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_name,dim,seq_len,n_iter,update_time,slope,lr,init_seed_val),val_acc)
-np.save('SHD_data/loss/sim_{}layer_{}_{}dim_{}seqlen_{}iter_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_name,dim,seq_len,n_iter,update_time,slope,lr,init_seed_val),train_loss)
+np.save('SHD_data/layer_cosine_similarity/sim_{}layer_{}_{}seqlen_{}iter_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_sz,seq_len,n_iter,update_time,slope,lr,init_seed_val),cosine_similarity_layer)
+np.save('SHD_data/model_cosine_similarity/sim_{}layer_{}_{}seqlen_{}iter_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_sz,seq_len,n_iter,update_time,slope,lr,init_seed_val),cosine_similarity)
+np.save('SHD_data/accuracy/sim_{}layer_{}_{}seqlen_{}iter_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_sz,seq_len,n_iter,update_time,slope,lr,init_seed_val),val_acc)
+np.save('SHD_data/loss/sim_{}layer_{}_{}seqlen_{}iter_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_sz,seq_len,n_iter,update_time,slope,lr,init_seed_val),train_loss)
 

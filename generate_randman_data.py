@@ -3,10 +3,8 @@
 
 
 import pickle
-import sys
 
 import os
-#os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 os.environ['TF_CUDNN_DETERMINISTIC']='1'
 import jax
 import jax.numpy as jnp
@@ -23,44 +21,31 @@ from utils import gen_test_data, cos_sim_train_func, online_sim_train_func, cust
 
 
 # In[2]:
-################# SETTINGS #######################################
 
-#update_ind,enc_ind,seed_ind = np.unravel_index(int(sys.argv[1])-1,(2,2,4))
-
-update_ind = 0
 
 output_size = 10
 nlayers = 3
 dim = 3
 seq_len = 50
-lr = ["001","00025"][update_ind]
+lr = "001"
 manifold_seed_val = 0
-init_seed_val = 0#seed_ind
+init_seed_val = 0
 manifold_seed = jax.random.PRNGKey(manifold_seed_val)
 init_seed = jax.random.split(jax.random.PRNGKey(init_seed_val))[0]
-dtype = jnp.float32#jnp.bfloat16
+dtype = jnp.float32
 slope = 25
-tau = dtype(2.) ### change to 2. ####
+tau = dtype(2.)
 batch_sz = 128
 spike_fn = sl.fs(slope)
-n_iter = 20000 # 2000
-layer_name = 128
-update_time = ['offline','online'][update_ind]
+n_iter = 100
+layer_sz = 128
+update_time = 'offline'
 timing = ['rate','time'][0]
-if timing=='time':
-    t_name = 'time'
-    t = True
-elif timing == 'rate':
-    t_name = 'rate'
-    t = False
-if layer_name == 128:
-    layer_sz = lambda i: 128
-elif layer_name == 512:
-    layer_sz = lambda i: 512
-elif layer_name == 256:
-    layer_sz = lambda i: 256
+t = timing=='time'
 
-optimizer = optax.adamax(dtype([0.001,0.00025][update_ind]))
+layer_sz = 128
+
+optimizer = optax.adamax(dtype(lr))
 
 #------------------------------------------------------#
 
@@ -80,12 +65,6 @@ gen_data = Partial(rd.make_spiking_dataset,nb_classes=10, nb_units=50, nb_steps=
 
 
 test_data,test_labels = gen_test_data(gen_data,1,manifold_seed)
-
-
-# In[6]:
-
-
-carry = [OTPE.initialize_carry(dtype=dtype)]*nlayers
 
 
 # In[7]:
@@ -139,8 +118,8 @@ val_acc = []
 train_loss = []
 all_params = [params]*4
 all_params.append(bp_params)
-all_opt = [opt_state]*4
-all_opt.append(bp_opt_state)
+all_opt_states = [opt_state]*4
+all_opt_states.append(bp_opt_state)
 carry = tree_map(lambda x: jnp.zeros_like(x,dtype),carry)
 test_carry = tree_map(lambda x: jnp.zeros_like(x,dtype),test_carry)
 best_acc = 0
@@ -184,9 +163,9 @@ online_training = jax.jit(Partial(online_sim_train_func,OTTTmodel,
 
 # In[14]:
 
-
-with open('randman_data/models/model_{}layer_{}_{}dim_{}_{}seqlen_{}iter_{}manifold_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_name,dim,update_time,seq_len,0,manifold_seed_val,t_name,slope,lr,init_seed_val),'wb') as file:
-            pickle.dump(tree_map(jnp.float32,all_params),file,protocol=pickle.HIGHEST_PROTOCOL)
+#import pdb; pdb.set_trace()
+# with open('randman_data/models/model_{}layer_{}_{}dim_{}_{}seqlen_{}iter_{}manifold_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_sz,dim,update_time,seq_len,0,manifold_seed_val,timing,slope,lr,init_seed_val),'wb') as file:
+#             pickle.dump(tree_map(jnp.float32,all_params),file,protocol=pickle.HIGHEST_PROTOCOL)
 
 
 # In[ ]:
@@ -196,7 +175,7 @@ for epoch in range(n_iter):
     
     if update_time == 'offline':
 
-        all_loss, all_cosines, all_cosines_per, all_acc, all_params, all_opt, key = offline_training(all_params,all_opt,key)
+        all_loss, all_cosines, all_cosines_per, all_acc, all_params, all_opt_states, key = offline_training(all_params,all_opt_states,key)
         
 
         cos.append(np.stack(list(tree_map(jnp.float32,all_cosines))))
@@ -204,29 +183,23 @@ for epoch in range(n_iter):
     
     elif update_time == 'online':
 
-        all_loss, all_acc, all_params, all_opt, key = online_training(all_params,all_opt,key)
+        all_loss, all_acc, all_params, all_opt_states, key = online_training(all_params,all_opt_states,key)
 
 
     val_acc.append(np.stack(list(tree_map(jnp.float32,all_acc))))
-
     train_loss.append(np.stack(list(tree_map(jnp.float32,all_loss))))
 
-    #print(epoch)
-    #print(val_acc[-1])
-    #print(cos[-1])
-    #print(cos_per[-1])
-    #print(all_cosines_per)
 
-    if (epoch+1)%200 == 0: #200
-        with open('randman_data/models/model_{}layer_{}_{}dim_{}_{}seqlen_{}iter_{}manifold_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_name,dim,update_time,seq_len,epoch+1,manifold_seed_val,t_name,slope,lr,init_seed_val),'wb') as file:
+    if (epoch+1)%200 == 0:
+        with open('randman_data/models/model_{}layer_{}_{}dim_{}_{}seqlen_{}iter_{}manifold_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_sz,dim,update_time,seq_len,epoch+1,manifold_seed_val,timing,slope,lr,init_seed_val),'wb') as file:
             pickle.dump(tree_map(jnp.float32,all_params),file,protocol=pickle.HIGHEST_PROTOCOL)
 
 
 # In[ ]:
 
 
-np.save('randman_data/layer_cosine_similarity/sim_{}layer_{}_{}dim_{}_{}seqlen_{}iter_{}manifold_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_name,dim,update_time,seq_len,n_iter,manifold_seed_val,t_name,slope,lr,init_seed_val),cos_per)
-np.save('randman_data/model_cosine_similarity/sim_{}layer_{}_{}dim_{}_{}seqlen_{}iter_{}manifold_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_name,dim,update_time,seq_len,n_iter,manifold_seed_val,t_name,slope,lr,init_seed_val),cos)
-np.save('randman_data/accuracy/sim_{}layer_{}_{}dim_{}_{}seqlen_{}iter_{}manifold_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_name,dim,update_time,seq_len,n_iter,manifold_seed_val,t_name,slope,lr,init_seed_val),val_acc)
-np.save('randman_data/loss/sim_{}layer_{}_{}dim_{}_{}seqlen_{}iter_{}manifold_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_name,dim,update_time,seq_len,n_iter,manifold_seed_val,t_name,slope,lr,init_seed_val),train_loss)
+np.save('randman_data/layer_cosine_similarity/sim_{}layer_{}_{}dim_{}_{}seqlen_{}iter_{}manifold_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_sz,dim,update_time,seq_len,n_iter,manifold_seed_val,timing,slope,lr,init_seed_val),cos_per)
+np.save('randman_data/model_cosine_similarity/sim_{}layer_{}_{}dim_{}_{}seqlen_{}iter_{}manifold_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_sz,dim,update_time,seq_len,n_iter,manifold_seed_val,timing,slope,lr,init_seed_val),cos)
+np.save('randman_data/accuracy/sim_{}layer_{}_{}dim_{}_{}seqlen_{}iter_{}manifold_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_sz,dim,update_time,seq_len,n_iter,manifold_seed_val,timing,slope,lr,init_seed_val),val_acc)
+np.save('randman_data/loss/sim_{}layer_{}_{}dim_{}_{}seqlen_{}iter_{}manifold_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_sz,dim,update_time,seq_len,n_iter,manifold_seed_val,timing,slope,lr,init_seed_val),train_loss)
 

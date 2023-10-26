@@ -1,15 +1,10 @@
-import functools
-
-
-from typing import Any, Callable, Sequence
+from typing import Any, Callable
 
 import jax
 from jax import dtypes
 from jax import random
 from flax import linen as nn
 import jax.numpy as jnp
-
-import numpy as np
 
 from jax._src.nn.initializers import lecun_normal
 
@@ -72,7 +67,7 @@ def fs(slope):
 
     @jax.custom_vjp
     def fast_sigmoid(x):
-      # if not dtype float grad ops wont work
+
       return jnp.array(x >= 0.0, dtype=x.dtype)
     
     
@@ -100,7 +95,7 @@ class subtraction_LIF(nn.Module):
 
   @nn.compact
   def __call__(self, u, s_in):
-    #tau = self.param("tau", uniform(self.init_tau,dtype=self.dtype), (u.shape[-1],))
+
     v_threshold = jnp.array([self.v_threshold], dtype=self.dtype)
 
     u = u * jax.nn.sigmoid(self.init_tau) + s_in
