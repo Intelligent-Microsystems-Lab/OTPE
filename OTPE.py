@@ -100,9 +100,6 @@ class OTTT(nn.Module):
     def __call__(self,carry,inputs):
 
         def f(snn,carry,inputs):
-            # if carry['u'].size == 0:
-            #     carry['u'] = jnp.zeros(self.output_sz,self.dtype)
-            #     carry['a_hat'] = jnp.zeros(inputs.size,self.dtype)
             carry['u'],s = snn(carry['u'],inputs)
             return carry,s
 
@@ -272,11 +269,7 @@ class Approx_OTPE(nn.Module):
     def __call__(self,carry,inputs):
 
         def f(snn,carry,inputs):
-            # if carry['u'].size == 0:
-            #     carry['u'] = jnp.zeros(self.output_sz,self.dtype)
             carry['u'],s = snn(carry['u'],inputs)
-            # if len(carry['E']) == 0:
-            #     carry['E'] = {'params':freeze(tree_map(lambda x: jnp.zeros_like(x,self.dtype),snn.variables)['params'])}
             return carry,s
 
         def summed_spike(model,carry,x):
@@ -450,15 +443,7 @@ class Approx_OTPE_front(nn.Module):
     def __call__(self,carry,inputs):
 
         def f(snn,carry,inputs):
-            # if carry['u'].size == 0:
-            #     carry['u'] = jnp.zeros(self.output_sz,self.dtype)
-            #     carry['J_u_x'] = jnp.zeros(self.output_sz,self.dtype)
-            #     carry['out'] = jnp.zeros(self.output_sz,self.dtype)
-            #     carry['a_hat'] = jnp.zeros(inputs.size,self.dtype)
-            #     carry['a_hat2'] = jnp.zeros(inputs.size,self.dtype)
             carry['u'],s = snn(carry['u'],inputs)
-            # if len(carry['J_u_params']) == 0:
-            #     carry['J_u_params'] = {'params':freeze(tree_map(lambda x: jnp.zeros_like(x,self.dtype),snn.variables)['params'])}
             return carry,s
 
         def summed_spike(model,carry,x):
