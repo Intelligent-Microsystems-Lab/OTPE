@@ -10,18 +10,21 @@ For the loss landscape, set the matching settings of the generated Randman data 
 To generate different seeds (0-3), change the value of "init_seed_val" in the scripts -->
 
 # OTPE
-Code for the paper "Incorporating Post-Synaptic Effects into Online Training of Feed-Forward SNNs". This repo contains code to reproduce all figures and experiments in the paper. If you find this code useful please cite the paper (insert ArXiv link here)
+Code for the paper "Incorporating Post-Synaptic Effects into Online Training of Feed-Forward SNNs". This repo contains code to reproduce all figures and experiments in the paper. If you find this code useful please cite the paper <!-- (insert ArXiv link here) -->
 
 ## Installation and Usage
 
-To reproduce Randman results, go to `generate_randman_data.py`
+To reproduce Randman results, run `python generate_randman_data.py`
 Set the settings you wish to produce in the beginning of script.
 Then execute the script, which will save the data.
 
 You can do the same for SHD with `generate_SHD_data.py` and `generate_SHD_data-f.py`
 Use "generate_SHD_data-f.py" for online learning and `generate_SHD_data.py` for offline learning.
 
-In addition to pypi packages, you will need to install Randman from https://github.com/fzenke/randman
+For plotting, use `plots.ipynb`.
+For the loss landscape, set the matching settings of the generated Randman data in `gen_l.py` before running
+
+To generate different seeds (0-3), change the value of "init_seed_val" in the scripts
 
 <!--
 
@@ -31,22 +34,25 @@ Simply `git clone` the repository to your home computer. The `numerical_results.
 
 ## Requirements 
 
-The code is written in [Pyython 3.x] and uses the following packages:
-* [NumPY]
-* [JAX] version 1.3.1
-* [Tonic] version 1.x (only for downloading shakespeare dataset)
-* [matplotlib] for plotting figures
-* [randman]
+The code is written using Python 3.10 the following packages:
+
+* [jax] version 0.4.14
+* [flax] 0.7.2
+* [tonic] for loading Spiking Heidelberg Digits
+* [randman] For randman dataset (install Randman from https://github.com/fzenke/randman)
+* [optax] 0.1.7
+* [numpy]
+* [matplotlib]
 
 ## Citation
 
-If you enjoyed the paper or found the code useful, please cite as: 
+<!-- For the original paper and citing: -->
 
 <!-- ```
-@article{millidge2020predictive,
-  title={Predictive Coding Approximates Backprop along Arbitrary Computation Graphs},
-  author={Millidge, Beren and Tschantz, Alexander and Buckley, Christopher L},
-  journal={arXiv preprint arXiv:2006.04182},
-  year={2020}
+@article{placeholder,
+  title={},
+  author={},
+  journal={},
+  year={}
 }
 ``` -->
