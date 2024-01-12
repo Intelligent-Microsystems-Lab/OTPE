@@ -1,6 +1,0 @@
-#!/bin/bash
-#$ -q gpu@qa-rtx6k-041.crc.nd.edu  -l gpu_card=1 
-#$ -N SHD       # Specify job name
-conda activate jax
-cd OTPE
-python generate_SHD_data-mix.py

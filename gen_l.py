@@ -32,12 +32,12 @@ manifold_seed_val = 0
 init_seed_val = 0
 manifold_seed = jax.random.PRNGKey(manifold_seed_val)
 init_seed = jax.random.split(jax.random.PRNGKey(init_seed_val))[0]
-dtype = jnp.float32#jnp.bfloat16
+dtype = jnp.float32
 slope = 25
-tau = dtype(2.) ### change to 2. ####
+tau = dtype(2.)
 batch_sz = 128
 spike_fn = sl.fs(slope)
-n_iter = 20000 # 2000
+n_iter = 20000
 layer_name = 128
 update_time = 'offline'
 timing = 'rate'
@@ -70,8 +70,7 @@ marker_colors = [sb.set_hls_values('#e41a1c',l=0.2),
 model_indicator = 4
 
 gen_data = Partial(rd.make_spiking_dataset,nb_classes=10, nb_units=50, nb_steps=seq_len, nb_samples=1000, dim_manifold=dim, alpha=1., nb_spikes=1, seed=manifold_seed,shuffle=True,time_encode=t,dtype=dtype)
-#gen_data = Partial(make_spiking_dataset, nb_classes=10, nb_units=50, nb_steps=20, nb_samples=10000,
-#                   dim_manifold=3, alpha=1., nb_spikes=1, seed=key, shuffle=True, one_hot=True, sp=1)
+
 
 
 class bp_mlp_variable(nn.Module):
@@ -83,7 +82,6 @@ class bp_mlp_variable(nn.Module):
     snns.append(sl.SpikingBlock(nn.Dense(10), sl.subLIF(tau, spike_fn)))
     for i in range(1, self.n_layers):
       snns.append(sl.SpikingBlock(nn.Dense(self.sz), sl.subLIF(tau, spike_fn)))
-      # snns.append(osj.osjModel2(nn.Dense,300,sl.osjLIF,tau,sl.fast_sigmoid))
     self.snns = snns
 
   def __call__(self, carry, s):
@@ -137,7 +135,6 @@ def project2d(d, dx, dy, proj_method):
   return x, y
 
 
-#model = bp_mlp_variable(nlayers, sz=layer_sz)
 model = bp_snn(output_sz=output_size, n_layers=nlayers, spike_fn=spike_fn, layer_sz=layer_sz, dtype=dtype)
 
 carry = [{'u': jnp.zeros((batch_sz, 10))}] + \
@@ -154,7 +151,6 @@ def loss_fn(params, carry, b):
 @jax.jit
 def get_loss(params, gen_key):
   data, logits = gen_data(seed2=gen_key)
-  #data,logits = gen_test_data(gen_data,1,manifold_seed)
   p_loss = Partial(loss_fn, params)
   c, loss = jax.lax.scan(
       p_loss, carry, (data[:, :batch_sz], logits[:, :batch_sz]))
@@ -276,14 +272,8 @@ xv, yv, zv = get_surface(x, y, xdirection, ydirection, params_end[model_indicato
 font_size = 23
 gen_lw = 8
 
-#plt.rc("font", family="Helvetica", weight="bold")
 plt.rc("font", weight="bold")
 fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(14.4, 8.5))
-
-#ax.set_title(
-#    "Loss Landscape and Training Trajectory for 3-layer, 512 width",
-#    fontdict={"weight": "bold", "size": font_size + 3},
-#)
 
 
 def fmt(x):
@@ -307,7 +297,6 @@ for j in range(5):
       markeredgecolor='black',
       markerfacecolor="None",
       markersize=8,
-      # color="r",
       linewidth=gen_lw,
   )
 
@@ -322,6 +311,5 @@ ax.set_ylabel(
 )
 
 plt.tight_layout()
-#plt.savefig("ll_offline_3_128"+str(model_indicator)+".png", dpi=300, bbox_inches="tight")
 plt.savefig("plots/randman_ll_rate_offline_{}_{}_0".format(nlayers,layer_name)+".svg", dpi=300, bbox_inches="tight")
 plt.close()

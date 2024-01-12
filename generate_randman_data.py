@@ -163,7 +163,10 @@ online_training = jax.jit(Partial(online_sim_train_func,OTTTmodel,
 
 # In[14]:
 
-#import pdb; pdb.set_trace()
+#---------------------------------------------------------#
+# Uncomment below to save model params for loss landscape #
+#---------------------------------------------------------#
+
 # with open('randman_data/models/model_{}layer_{}_{}dim_{}_{}seqlen_{}iter_{}manifold_{}_sub_{}fs_adamax_lr{}_{}seed'.format(nlayers,layer_sz,dim,update_time,seq_len,0,manifold_seed_val,timing,slope,lr,init_seed_val),'wb') as file:
 #             pickle.dump(tree_map(jnp.float32,all_params),file,protocol=pickle.HIGHEST_PROTOCOL)
 

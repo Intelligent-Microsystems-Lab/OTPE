@@ -221,7 +221,7 @@ for epoch in range(n_iter):
 
     val_acc.append(np.stack(list(tree_map(jnp.float32,all_acc))))
     train_loss.append(np.stack(list(tree_map(jnp.float32,all_loss))))
-    
+    print(val_acc[-1])
     
     is_best = np.greater(val_acc[-1],best_val).squeeze()
     best_val = np.where(is_best,val_acc[-1],best_val)

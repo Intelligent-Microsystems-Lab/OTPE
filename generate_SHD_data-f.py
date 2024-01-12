@@ -6,7 +6,6 @@ import pickle
 import sys
 
 import os
-#os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 os.environ['TF_CUDNN_DETERMINISTIC']='1'
 import jax
 import jax.numpy as jnp
@@ -32,35 +31,27 @@ np.random.seed(0)
 
 
 ################## SETTINGS #########################
-#lr_ind,seed_ind = np.unravel_index(int(sys.argv[1])-1,(2,4))
-lr_ind = 0
-
 
 output_size = 20
 nlayers = 3
 dim = 3
 seq_len = 50
 slope = 25
-lr = 1e-4#['4e-5','25e-6','1e-5','85e-7'][lr_ind]#['001','00085','0007','00055','0004','00025','0001','000085','00007','000055'][lr_ind]
+lr = '1e-4'
 manifold_seed_val = 0
-init_seed_val = 0#seed_ind
+init_seed_val = 0
 manifold_seed = jax.random.PRNGKey(manifold_seed_val)
 init_seed = jax.random.split(jax.random.PRNGKey(init_seed_val))[0]
-dtype = jnp.float32#jnp.bfloat16
+dtype = jnp.float32
 tau = dtype(2.)
 batch_sz = 128
 spike_fn = sl.fs(slope)
 n_iter = 10000
-layer_name = [128,512][1]
+layer_name = 128
+layer_sz = layer_name
 update_time = 'online'
-if layer_name == 128:
-    layer_sz = lambda i: 128
-elif layer_name == 512:
-    layer_sz = lambda i: 512
-elif layer_name == 256:
-    layer_sz = lambda i: 256
 
-optimizer = optax.adamax(dtype([4e-5,25e-6,1e-5,85e-7][lr_ind]))#[0.001,0.00085,0.0007,0.00055,0.0004,0.00025,0.0001,0.000085,0.00007,0.000055][lr_ind]))
+optimizer = optax.adamax(dtype(lr))
 
 #------------------------------------------------------------------#
 
@@ -74,6 +65,9 @@ test = tonic.datasets.SHD('data',train=False,transform=tonic.transforms.ToFrame(
 
 # In[4]:
 
+#-----------------------------------------------#
+# Uncomment below to load pre-processed dataset #
+#-----------------------------------------------#
 
 # train_data = jnp.load('data/train_data.npy')
 # train_labels = jnp.load('data/train_labels.npy')
@@ -131,6 +125,9 @@ test_labels = jnp.tile(jnp.expand_dims(test_labels,axis=2),seq_len).transpose(2,
 
 # In[8]:
 
+#-----------------------------------------------#
+# Uncomment below to save pre-processed dataset #
+#-----------------------------------------------#
 
 # jnp.save('data/train_data.npy',train_data)
 # jnp.save('data/train_labels.npy',train_labels)
@@ -172,19 +169,6 @@ test_carry = [OTPE.test_carry()]*nlayers
 test_carry,_ = OTPEmodel.apply(params,test_carry,test_data[0])
 
 
-# In[12]:
-
-
-# bp_model = bp_snn(output_sz=output_size, n_layers=nlayers, spike_fn=spike_fn, layer_sz=layer_sz, dtype=dtype)
-# bp_carry = carry
-# bp_params = bp_model.init(init_seed,bp_carry,train_data[0,:batch_sz])
-# struct = tree_structure(bp_params)
-# bp_params = tree_unflatten(struct,tree_leaves(orig_params))
-
-# bp_carry,s = bp_model.apply(bp_params,bp_carry,train_data[0,:batch_sz])
-# bp_opt_state = optimizer.init(bp_params)
-
-
 # In[13]:
 
 
@@ -202,31 +186,11 @@ cos_per = []
 val_acc = []
 train_loss = []
 all_params = [params]*6
-# all_params.append(bp_params)
 all_opt = [opt_state]*6
-# all_opt.append(bp_opt_state)
 best_params = tree_map(jnp.zeros_like,all_params)
 best_val = [0]*6
-# if update_time == 'offline':
-#     best_val.append(0)
 
 
-# In[15]:
-
-
-# offline_training = jax.jit(Partial(cos_sim_train_func,OTTTmodel,
-#                        Approx_OTPEmodel,
-#                        Mixmodel,
-#                        OTPEmodel,
-#                        bp_model,
-#                        optimizer,
-#                        carry,
-#                        val_carry,
-#                        val_data,
-#                        val_labels,
-#                        batch_sz,
-#                        gen_data
-#                        ))
 
 
 # In[16]:
@@ -250,6 +214,9 @@ online_training = jax.jit(Partial(online_front_train_func,OTTTmodel,
 
 # In[17]:
 
+#---------------------------------------------------------#
+# Uncomment below to save model params for loss landscape #
+#---------------------------------------------------------#
 
 # with open('SHD_data/models/model_{}layer_{}_{}dim_{}seqlen_{}iter_{}seed_{}_sub_{}fs_adamax_lr{}'.format(nlayers,layer_name,dim,seq_len,0,init_seed_val,update_time,slope,lr),'wb') as file:
 #            pickle.dump(tree_map(jnp.float32,all_params),file,protocol=pickle.HIGHEST_PROTOCOL)
@@ -260,15 +227,6 @@ online_training = jax.jit(Partial(online_front_train_func,OTTTmodel,
 
 for epoch in range(n_iter):        
     
-    # if update_time == 'offline':
-
-    #     all_loss, all_cosines, all_cosines_per, all_acc, all_params, all_opt, key = offline_training(all_params,all_opt,key)
-        
-
-    #     cos.append(np.stack(list(tree_map(jnp.float32,all_cosines))))
-    #     cos_per.append(np.stack(list((tree_map(jnp.float32,all_cosines_per)))))
-    
-    # elif update_time == 'online':
 
     all_loss, all_acc, all_params, all_opt, key = online_training(all_params,all_opt,key)
 
@@ -277,11 +235,6 @@ for epoch in range(n_iter):
 
     train_loss.append(np.stack(list(tree_map(jnp.float32,all_loss))))
     
-    #print(epoch)
-    #print(val_acc[-1])
-        #print(cos[-1])
-        #print(cos_per[-1])
-        #print(all_cosines_per)
     
     truth = np.greater(val_acc[-1],best_val).squeeze()
     best_val = np.where(truth,val_acc[-1],best_val)
@@ -290,13 +243,21 @@ for epoch in range(n_iter):
         if truth[i]:
             best_params[i] = all_params[i]
     
+
+        #---------------------------------------------------------#
+        # Uncomment below to save model params for loss landscape #
+        #---------------------------------------------------------#
+            
         # if (epoch+1)%200 == 0: #200
         #     with open('SHD_data/models/model_{}layer_{}_{}dim_{}seqlen_{}iter_{}seed_{}_sub_{}fs_adamax_lr{}'.format(nlayers,layer_name,dim,seq_len,epoch+1,init_seed_val,update_time,slope,lr),'wb') as file:
         #         pickle.dump(tree_map(jnp.float32,all_params),file,protocol=pickle.HIGHEST_PROTOCOL)
 
 
 # In[19]:
-
+            
+#------------------------------------#
+# Uncomment below to save best model #
+#------------------------------------#
 
 # with open('SHD_data/models/model_{}layer_{}_{}dim_{}seqlen_best_{}seed_{}_sub_{}fs_adamax_lr{}'.format(nlayers,layer_name,dim,seq_len,init_seed_val,t_name,slope,lr),'wb') as file:
 #     pickle.dump(tree_map(jnp.float32,best_params),file,protocol=pickle.HIGHEST_PROTOCOL)
@@ -327,4 +288,3 @@ np.save('SHD_data/layer_cosine_similarity/sim_{}layer_{}_{}dim_{}seqlen_{}iter_{
 np.save('SHD_data/model_cosine_similarity/sim_{}layer_{}_{}dim_{}seqlen_{}iter_{}_sub_{}fs_adamax_front_lr{}_{}seed'.format(nlayers,layer_name,dim,seq_len,n_iter,update_time,slope,lr,init_seed_val),cos)
 np.save('SHD_data/accuracy/sim_{}layer_{}_{}dim_{}seqlen_{}iter_{}_sub_{}fs_adamax_front_lr{}_{}seed'.format(nlayers,layer_name,dim,seq_len,n_iter,update_time,slope,lr,init_seed_val),val_acc)
 np.save('SHD_data/loss/sim_{}layer_{}_{}dim_{}seqlen_{}iter_{}_sub_{}fs_adamax_front_lr{}_{}seed'.format(nlayers,layer_name,dim,seq_len,n_iter,update_time,slope,lr,init_seed_val),train_loss)
-

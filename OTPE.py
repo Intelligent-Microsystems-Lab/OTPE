@@ -375,13 +375,13 @@ class OTPE_front(nn.Module):
             
             ds_dtheta = tree_map(map_s, carry['E'], ds_dtheta_cur)
 
-            carry['J_u_params'] = tree_map(map_u, carry['E'], du_cur_dtheta_cur)
+            carry['E'] = tree_map(map_u, carry['E'], du_cur_dtheta_cur)
 
             sig_tau = nn.sigmoid(self.init_tau)
 
             map_r = lambda x,y: sig_tau*x + y
 
-            carry['r2'] = tree_map(map_r,carry['r2'],ds_dtheta)
+            carry['R_hat'] = tree_map(map_r,carry['R_hat'],ds_dtheta)
 
             ratio = sig_tau*carry['ratio']
             carry['ratio'] = ratio + 1
